@@ -213,73 +213,90 @@ export default function App() {
   const lastFrameRef = useRef(performance.now());
   const isSoundRef = useRef(isSoundEnabled);
 
-  // Alert state refs
-  const badStartRef = useRef<number | null>(null);
-  const warningFiredRef = useRef(false);
+// Alert state refs
+const badStartRef = useRef<number | null>(null);
+const warningFiredRef = useRef(false);
 
-  useEffect(() => {
-    isSoundRef.current = isSoundEnabled;
-  }, [isSoundEnabled]);
+useEffect(() => {
+  isSoundRef.current = isSoundEnabled;
+}, [isSoundEnabled]);
 
-  // ── Audio ──────────────────────────────────────────────────────────────────
-  const initAudio = () => {
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
-    if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume();
-  };
+// ── Audio ──────────────────────────────────────────────────────────────────
+const initAudio = () => {
+  if (!audioCtxRef.current) {
+    audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+  }
+  if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume();
+};
 
-  const startBeep = useCallback(() => {
-    if (beepRef.current) return;
-    initAudio();
-    const beep = () => {
-      const ctx = audioCtxRef.current;
-      if (!ctx) return;
-      if (ctx.state === 'suspended') ctx.resume();
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, ctx.currentTime);
-      g.gain.setValueAtTime(0.12, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-      osc.connect(g);
-      g.connect(ctx.destination);
-      try {
-        osc.start();
-        osc.stop(ctx.currentTime + 0.18);
-      } catch {}
-    };
-    beep();
-    beepRef.current = setInterval(beep, 450);
-  }, []);
-
-  const stopBeep = useCallback(() => {
-    if (beepRef.current) {
-      clearInterval(beepRef.current);
-      beepRef.current = null;
-    }
-  }, []);
-
-  const playDing = () => {
-    if (!isSoundRef.current) return;
-    initAudio();
+const startBeep = useCallback(() => {
+  if (beepRef.current) return;
+  initAudio();
+  const beep = () => {
     const ctx = audioCtxRef.current;
     if (!ctx) return;
-    [[523.25, 0, 0.3], [659.25, 200, 0.3], [783.99, 400, 0.5]].forEach(([f, d, dur]) => {
-      setTimeout(() => {
-        const osc = ctx.createOscillator();
-        const g = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(f as number, ctx.currentTime);
-        g.gain.setValueAtTime(0.15, ctx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (dur as number));
-        osc.connect(g);
-        g.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + (dur as number) + 0.1);
-      }, d as number);
-    });
+    if (ctx.state === 'suspended') ctx.resume();
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    g.gain.setValueAtTime(0.12, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+    osc.connect(g);
+    g.connect(ctx.destination);
+    try {
+      osc.start();
+      osc.stop(ctx.currentTime + 0.18);
+    } catch {}
   };
+  beep();
+  beepRef.current = setInterval(beep, 450);
+}, []);
+
+const stopBeep = useCallback(() => {
+  if (beepRef.current) {
+    clearInterval(beepRef.current);
+    beepRef.current = null;
+  }
+}, []);
+
+const playDing = () => {
+  if (!isSoundRef.current) return;
+  initAudio();
+  const ctx = audioCtxRef.current;
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+
+  // Cấu trúc: [Tần số (Hz), Thời gian delay (giây), Độ dài nốt (giây)]
+  const notes = [
+    [523.25, 0.0, 0.3], // Nốt 1 (Đô 5)
+    [659.25, 0.2, 0.3], // Nốt 2 (Mi 5)
+    [783.99, 0.4, 0.5]  // Nốt 3 (Sol 5)
+  ];
+
+  notes.forEach(([f, delay, dur]) => {
+    const startTime = now + delay;
+    const endTime = startTime + dur;
+
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(f, startTime);
+
+    // Chuỗi tự động hóa âm lượng để tránh tiếng click/pốp rác
+    g.gain.setValueAtTime(0, now); 
+    g.gain.setValueAtTime(0.15, startTime); 
+    g.gain.exponentialRampToValueAtTime(0.001, endTime); 
+
+    osc.connect(g);
+    g.connect(ctx.destination);
+
+    osc.start(startTime);
+    osc.stop(endTime + 0.1); // Thêm một khoảng đệm nhỏ trước khi ngắt hẳn oscillator
+  });
+};
 
   // ── Pomodoro ───────────────────────────────────────────────────────────────
   useEffect(() => {
